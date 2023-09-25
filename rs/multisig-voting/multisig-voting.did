@@ -1,0 +1,57 @@
+type Config = record {
+  initialized : bool;
+  governance_canister : principal;
+  name : text;
+  description : text;
+  vote_buffer_time : nat64;
+  total_votes : nat64;
+  votes_required : nat64;
+};
+type ProposalState = record {
+  vote_record : VoteRecord;
+  state : State;
+  expiration : nat64;
+};
+type Result = variant { Ok; Err : ReturnError };
+type Result_1 = variant { Ok : Config; Err : ReturnError };
+type ReturnError = variant {
+  GenericError;
+  MemoryError;
+  InterCanisterCallError;
+  Unauthorized;
+  AlreadyExists;
+  InputError;
+  Expired;
+};
+type State = variant { Failed; Passed; Open };
+type UserRole = variant { Admin };
+type Vote = variant { No; Yes; Abstain };
+type VoteRecord = record {
+  abstain_votes : vec principal;
+  yes_votes : vec principal;
+  no_votes : vec principal;
+};
+service : (principal, vec principal) -> {
+  add_role : (UserRole, principal) -> (Result);
+  get_config : () -> (Result_1) query;
+  get_description : () -> (text) query;
+  get_governance : () -> (principal) query;
+  get_m_of_n : () -> (nat64, nat64) query;
+  get_name : () -> (text) query;
+  get_num_proposals : () -> (nat64) query;
+  get_open_proposals : () -> (vec nat64) query;
+  get_proposal_state : (nat64) -> (opt ProposalState) query;
+  get_vote_buffer_time : () -> (nat64) query;
+  has_role : (UserRole, principal) -> (bool) query;
+  initialize : () -> ();
+  is_initialized : () -> (bool) query;
+  notify_multisig : (nat64, nat64) -> ();
+  remove_role : (UserRole, principal) -> ();
+  set_governance : (principal) -> ();
+  set_name_description : (text, text) -> ();
+  submit_vote_result : (nat64) -> (Result);
+  sync_with_governance : () -> (Result);
+  update_m_of_n : (nat64, nat64, vec principal) -> ();
+  users_of_role : (UserRole) -> (vec principal) query;
+  vote_proposal : (nat64, Vote) -> (Result);
+}

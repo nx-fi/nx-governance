@@ -1,0 +1,225 @@
+type CanisterChange = record {
+  timestamp_nanos : nat64;
+  canister_version : nat64;
+  origin : CanisterChangeOrigin;
+  details : CanisterChangeDetails;
+};
+type CanisterChangeDetails = variant {
+  creation : CreationRecord;
+  code_deployment : CodeDeploymentRecord;
+  controllers_change : CreationRecord;
+  code_uninstall;
+};
+type CanisterChangeOrigin = variant {
+  from_user : FromUserRecord;
+  from_canister : FromCanisterRecord;
+};
+type CanisterInfoResponse = record {
+  controllers : vec principal;
+  module_hash : opt vec nat8;
+  recent_changes : vec CanisterChange;
+  total_num_changes : nat64;
+};
+type CanisterInstallMode = variant { reinstall; upgrade; install };
+type CanisterMessage = record {
+  method : text;
+  canister_id : principal;
+  pre_validate : opt PreValidateTarget;
+  post_validate : opt PostValidateTarget;
+  message : vec nat8;
+  payment : nat;
+};
+type CanisterStatusResponse = record {
+  status : CanisterStatusType;
+  memory_size : nat;
+  cycles : nat;
+  settings : DefiniteCanisterSettings;
+  idle_cycles_burned_per_day : nat;
+  module_hash : opt vec nat8;
+};
+type CanisterStatusType = variant { stopped; stopping; running };
+type CodeDeploymentRecord = record {
+  mode : CanisterInstallMode;
+  module_hash : vec nat8;
+};
+type Config = record {
+  initialized : bool;
+  vote_manager_hook : opt principal;
+  name : text;
+  validator_hook : opt principal;
+  description : text;
+  voting_may_end_early : bool;
+  min_passing_threshold : ProposalPassingThreshold;
+  min_voting_period : nat64;
+};
+type CreationRecord = record { controllers : vec principal };
+type DefiniteCanisterSettings = record {
+  freezing_threshold : nat;
+  controllers : vec principal;
+  memory_allocation : nat;
+  compute_allocation : nat;
+};
+type ExecResult = variant { Ok : vec nat8; Err : record { int32; text } };
+type ExecutionStep = record { step : nat8; state : ExecutionStepState };
+type ExecutionStepState = variant {
+  ExecutionCallError;
+  PreValidateFailed;
+  Executing;
+  PostValidateFailed;
+  Succeeded;
+  PreValidateCallError;
+  PostValidateCallError;
+  PreValidating;
+  PostValidating;
+};
+type FromCanisterRecord = record {
+  canister_version : opt nat64;
+  canister_id : principal;
+};
+type FromUserRecord = record { user_id : principal };
+type HttpRequest = record {
+  url : text;
+  method : text;
+  body : vec nat8;
+  headers : vec record { text; text };
+};
+type HttpResponse = record {
+  body : vec nat8;
+  headers : vec record { text; text };
+  status_code : nat16;
+};
+type PostValidateTarget = record {
+  method : text;
+  canister_id : principal;
+  payment : nat;
+};
+type PreValidateTarget = record {
+  method : text;
+  canister_id : principal;
+  payload : vec nat8;
+  payment : nat;
+};
+type Proposal = record {
+  metadata_id : nat64;
+  activates : Schedule;
+  voting_end_time : opt nat64;
+  payload_id : nat64;
+  expires : Schedule;
+  votes_no : int;
+  validated : opt bool;
+  votes_abstain : int;
+  created_at : nat64;
+  passing_threshold : opt ProposalPassingThreshold;
+  auto_execute : bool;
+  state : ProposalState;
+  proposer : principal;
+  votes_yes : int;
+  total_voting_power : int;
+};
+type ProposalExec = record { execution_result : vec ExecResult };
+type ProposalMetadata = record {
+  memo : vec nat8;
+  name : text;
+  description : text;
+};
+type ProposalPassingThreshold = record {
+  passing_threshold : nat16;
+  quorum : nat16;
+};
+type ProposalPayload = record {
+  messages : vec CanisterMessage;
+  depends_on : vec nat64;
+};
+type ProposalRevoke = record {
+  revoked_at : nat64;
+  proposal_id : nat64;
+  reason : text;
+};
+type ProposalState = variant {
+  ValidationFailed;
+  Failed : ExecutionStep;
+  Open;
+  QuorumNotMet;
+  ForceExecutionFailed : ExecutionStep;
+  Executing : ExecutionStep;
+  Rejected;
+  ForceExecutionSucceeded;
+  Succeeded;
+  Accepted;
+  ForceExecuting : ExecutionStep;
+  Submitted;
+  Revoked;
+  Expired;
+};
+type Result = variant { Ok; Err : ReturnError };
+type Result_1 = variant { Ok : Config; Err : ReturnError };
+type Result_2 = variant { Ok : nat64; Err : ReturnError };
+type ReturnError = variant {
+  DependentProposalNotReady;
+  GenericError;
+  MemoryError;
+  InvalidIndex;
+  InterCanisterCallError;
+  PreValidateFailed;
+  PostValidateFailed;
+  StateTransitionError;
+  Unauthorized;
+  AlreadyExists;
+  ExecutionFailed;
+  IncorrectProposalState;
+  DependentProposalNotSucceeded;
+  InputError;
+  Expired;
+  ArithmeticError;
+};
+type Schedule = variant { At : nat64; In : nat64 };
+type UserRole = variant {
+  ForceExecutor;
+  Proposer;
+  Executor;
+  Admin;
+  VoteManager;
+  Validator;
+  Revoker;
+};
+service : () -> {
+  add_role : (UserRole, principal) -> (Result);
+  execute : (nat64) -> (Result);
+  finalize_vote_result : (nat64) -> (Result);
+  force_execute : (nat64) -> (Result);
+  get_all_open_proposal_ids_with_expiration : () -> (
+      vec record { nat64; nat64 },
+    ) query;
+  get_all_submitted_proposal_ids : () -> (vec nat64) query;
+  get_config : () -> (Result_1) query;
+  get_controllers_of : (principal) -> (vec principal) query;
+  get_cycle_balance_of : (principal) -> (nat) query;
+  get_freezing_threshold_of : (principal) -> (nat) query;
+  get_info_of : (principal, opt nat64) -> (CanisterInfoResponse) query;
+  get_module_hash_of : (principal) -> (opt vec nat8) query;
+  get_next_proposal_id : () -> (nat64) query;
+  get_proposal : (nat64) -> (opt Proposal) query;
+  get_proposal_exec : (nat64) -> (opt ProposalExec) query;
+  get_proposal_metadata : (nat64) -> (opt ProposalMetadata) query;
+  get_proposal_payload : (nat64) -> (opt ProposalPayload) query;
+  get_proposal_revoke : (nat64) -> (opt ProposalRevoke) query;
+  get_proposal_states : (nat64, nat64) -> (vec ProposalState) query;
+  get_status_of : (principal) -> (CanisterStatusResponse) query;
+  get_stopping_status_of : (principal) -> (CanisterStatusType) query;
+  has_role : (UserRole, principal) -> (bool) query;
+  http_request : (HttpRequest) -> (HttpResponse) query;
+  initialize : (principal, principal, principal, vec principal) -> ();
+  remove_role : (UserRole, principal) -> ();
+  revoke : (nat64, text) -> (Result);
+  submit : (ProposalMetadata, ProposalPayload, Schedule, Schedule, bool) -> (
+      Result_2,
+    );
+  update_config : (Config) -> (Result);
+  update_total_voting_power : (nat64, int) -> (Result);
+  update_vote_result : (nat64, int, int, int) -> (Result);
+  update_vote_result_and_total_voting_power : (nat64, int, int, int, int) -> (
+      Result,
+    );
+  users_of_role : (UserRole) -> (vec principal) query;
+  validate : (nat64, opt nat64, opt ProposalPassingThreshold, bool) -> (Result);
+}

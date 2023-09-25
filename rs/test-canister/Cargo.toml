@@ -1,0 +1,17 @@
+[package]
+name = "test-canister"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "test-canister"
+path = "src/main.rs"
+
+[dependencies]
+candid.workspace = true
+ciborium.workspace = true
+ic-cdk.workspace = true
+ic-cdk-macros.workspace = true
+ic-stable-structures.workspace = true
+serde.workspace = true
+serde_bytes.workspace = true

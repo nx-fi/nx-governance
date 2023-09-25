@@ -1,0 +1,30 @@
+type Config = record {
+  counter : nat64;
+  initialized : bool;
+  name : text;
+  description : text;
+};
+type Result = variant { Ok; Err : ReturnError };
+type ReturnError = variant {
+  GenericError;
+  MemoryError;
+  InterCanisterCallError;
+  Unauthorized;
+  AlreadyExists;
+  InputError;
+  Expired;
+};
+type UserRole = variant { Admin };
+service : (principal) -> {
+  add_role : (UserRole, principal) -> (Result);
+  admin_change_counter : (nat64) -> (nat64);
+  get_config : () -> (Config) query;
+  get_counter : () -> (nat64) query;
+  get_description : () -> (text) query;
+  get_name : () -> (text) query;
+  has_role : (UserRole, principal) -> (bool) query;
+  increment : () -> (nat64);
+  is_initialized : () -> (bool) query;
+  remove_role : (UserRole, principal) -> ();
+  users_of_role : (UserRole) -> (vec principal) query;
+}

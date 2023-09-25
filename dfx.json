@@ -1,0 +1,26 @@
+{
+  "canisters": {
+    "nx-gov-main": {
+      "candid": "rs/nx-gov-main/nx-gov-main.did",
+      "type":"rust",
+      "package": "nx-gov-main"
+    },
+    "simple-validator": {
+      "candid": "rs/simple-validator/simple-validator.did",
+      "type":"rust",
+      "package": "simple-validator"
+    },
+    "multisig-voting": {
+      "candid": "rs/multisig-voting/multisig-voting.did",
+      "type":"rust",
+      "package": "multisig-voting"
+    },
+    "test-canister": {
+      "candid": "rs/test-canister/test-canister.did",
+      "type":"rust",
+      "package": "test-canister"
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}

@@ -1,0 +1,4 @@
+/target
+.dfx/*
+**/.env
+/demo

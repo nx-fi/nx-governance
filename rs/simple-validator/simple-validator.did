@@ -1,0 +1,59 @@
+type CanisterMessage = record {
+  method : text;
+  canister_id : principal;
+  pre_validate : opt PreValidateTarget;
+  post_validate : opt PostValidateTarget;
+  message : vec nat8;
+  payment : nat;
+};
+type Config = record {
+  initialized : bool;
+  governance_canister : principal;
+  name : text;
+  description : text;
+};
+type PostValidateTarget = record {
+  method : text;
+  canister_id : principal;
+  payment : nat;
+};
+type PreValidateTarget = record {
+  method : text;
+  canister_id : principal;
+  payload : vec nat8;
+  payment : nat;
+};
+type ProposalPayload = record {
+  messages : vec CanisterMessage;
+  depends_on : vec nat64;
+};
+type Result = variant { Ok; Err : ReturnError };
+type Result_1 = variant { Ok : Config; Err : ReturnError };
+type ReturnError = variant {
+  GenericError;
+  MemoryError;
+  InterCanisterCallError;
+  Unauthorized;
+  AlreadyExists;
+  InputError;
+  Expired;
+};
+type UserRole = variant { Admin };
+service : (principal) -> {
+  add_call_targets_to_whitelist : (vec principal) -> ();
+  add_role : (UserRole, principal) -> (Result);
+  get_call_target_whitelist : () -> (vec principal) query;
+  get_config : () -> (Result_1) query;
+  get_description : () -> (text) query;
+  get_governance : () -> (principal) query;
+  get_name : () -> (text) query;
+  get_proposal_validation : (nat64) -> (opt nat8) query;
+  has_role : (UserRole, principal) -> (bool) query;
+  is_initialized : () -> (bool) query;
+  notify_validator : (nat64, ProposalPayload) -> ();
+  remove_role : (UserRole, principal) -> ();
+  set_config : (Config) -> ();
+  set_governance : (principal) -> ();
+  sync_with_governance : () -> (Result);
+  users_of_role : (UserRole) -> (vec principal) query;
+}
