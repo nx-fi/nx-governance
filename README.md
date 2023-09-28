@@ -1,5 +1,7 @@
 # NX Governance: Modular On-Chain Governance Framework
-Welcome to NX Governance, a cutting-edge multi-chain governance framework built on the Internet Computer. Our framework is designed with a focus on modularity, transparency, versatility, and security, ensuring every administrative action is auditable and executed via democratic consensus.
+**Welcome to NX Governance, a cutting-edge multi-chain governance framework built on the Internet Computer.** Our framework is designed with a focus on modularity, transparency, versatility, and security, ensuring every administrative action is auditable and executed via democratic consensus.
+
+![nx3](https://github.com/nx-fi/nx-governance/assets/123998984/752a3356-466e-431d-8373-004e244754b3)
 
 🚨🚨🚨 THIS PROJECT IS STILL WIP. DO NOT USE FOR PRODUCTION. 🚨🚨🚨
 
