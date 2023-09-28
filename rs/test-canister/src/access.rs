@@ -1,4 +1,4 @@
-use crate::memory::{ADMIN_ROLES, CONFIG};
+use crate::memory::ADMIN_ROLES;
 use crate::types::{ReturnError, StablePrincipal, VM};
 
 use candid::{CandidType, Principal};
@@ -17,6 +17,10 @@ pub enum UserRole {
 #[update]
 pub fn add_role(role: UserRole, principal: Principal) -> Result<(), ReturnError> {
     require_caller_has_role(UserRole::Admin);
+    add_role_internal(role, principal)
+}
+
+pub(crate) fn add_role_internal(role: UserRole, principal: Principal) -> Result<(), ReturnError> {
     let op = |roles: &RefCell<StableVec<StablePrincipal, VM>>| -> Result<(), ReturnError> {
         if roles
             .borrow()
@@ -54,6 +58,20 @@ pub fn remove_role(role: UserRole, principal: Principal) {
     };
 }
 
+#[update]
+pub fn clear_users_of_role(role: UserRole) {
+    require_caller_has_role(UserRole::Admin);
+    let op = |roles: &RefCell<StableVec<StablePrincipal, VM>>| {
+        let r = roles.borrow_mut();
+        for _ in 0..r.len() {
+            r.pop();
+        }
+    };
+    match role {
+        UserRole::Admin => ADMIN_ROLES.with(op),
+    };
+}
+
 #[query]
 pub fn has_role(role: UserRole, principal: Principal) -> bool {
     let op = |roles: &RefCell<StableVec<StablePrincipal, VM>>| {
@@ -81,31 +99,4 @@ pub fn users_of_role(role: UserRole) -> Vec<Principal> {
     match role {
         UserRole::Admin => ADMIN_ROLES.with(op),
     }
-}
-
-/// Make sure this function is only called during init
-pub(crate) fn add_admin_during_init(principals: Vec<Principal>) -> Result<(), ReturnError> {
-    let initialized = CONFIG.with(|c| c.borrow().get().0.clone().unwrap().initialized);
-    assert!(
-        !initialized,
-        "add_admin_during_init should only be called during init"
-    );
-    ADMIN_ROLES.with(
-        |roles: &RefCell<StableVec<StablePrincipal, VM>>| -> Result<(), ReturnError> {
-            for principal in principals {
-                if roles
-                    .borrow()
-                    .iter()
-                    .any(|p| p == StablePrincipal::from(principal))
-                {
-                    return Err(ReturnError::AlreadyExists);
-                }
-                roles
-                    .borrow_mut()
-                    .push(&StablePrincipal::from(principal))
-                    .map_err(|_| ReturnError::MemoryError)?;
-            }
-            Ok(())
-        },
-    )
 }

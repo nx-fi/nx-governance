@@ -147,7 +147,7 @@ pub fn get_config() -> Result<Config, ReturnError> {
     CONFIG.with(|c| c.borrow().get().0.clone().ok_or(ReturnError::MemoryError))
 }
 
-pub fn config_set_initialized() {
+pub(crate) fn config_set_initialized() {
     CONFIG.with(|c| {
         let mut config = c.borrow().get().0.clone().unwrap();
         config.initialized = true;
@@ -155,17 +155,72 @@ pub fn config_set_initialized() {
     });
 }
 
-pub fn config_is_initialized() -> bool {
+pub(crate) fn config_is_initialized() -> bool {
     CONFIG.with(|c| c.borrow().get().0.clone().unwrap().initialized)
 }
 
 // ==== Proposals ====
+#[query]
+pub fn get_all_open_proposal_ids_with_expiration() -> Vec<(Index, TimeNs)> {
+    PROPOSALS.with(|p| {
+        p.borrow()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| {
+                if p.state == ProposalState::Open {
+                    Some((i as Index, p.voting_end_time.unwrap()))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    })
+}
 
-pub fn get_proposal_by_id(proposal_id: Index) -> Result<Proposal, ReturnError> {
+#[query]
+pub fn get_all_submitted_proposal_ids() -> Vec<Index> {
+    PROPOSALS.with(|p| {
+        p.borrow()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| {
+                if p.state == ProposalState::Submitted {
+                    Some(i as Index)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    })
+}
+
+#[query]
+pub fn get_proposal_states(skip: Index, take: Index) -> Vec<ProposalState> {
+    PROPOSALS.with(|p| {
+        p.borrow()
+            .iter()
+            .skip(skip as usize)
+            .take(take as usize)
+            .map(|p| p.state.clone())
+            .collect()
+    })
+}
+
+#[query]
+pub fn get_next_proposal_id() -> Index {
+    PROPOSALS.with(|p| p.borrow().len() as Index)
+}
+
+#[query]
+pub fn get_proposal(proposal_id: Index) -> Option<Proposal> {
+    PROPOSALS.with(|p| p.borrow().get(proposal_id))
+}
+
+pub(crate) fn get_proposal_by_id(proposal_id: Index) -> Result<Proposal, ReturnError> {
     PROPOSALS.with(|p| p.borrow().get(proposal_id).ok_or(ReturnError::InvalidIndex))
 }
 
-pub fn add_proposal(proposal: &Proposal) -> Result<u64, ReturnError> {
+pub(crate) fn add_proposal(proposal: &Proposal) -> Result<u64, ReturnError> {
     PROPOSALS.with(|p| {
         let p = p.borrow_mut();
         p.push(proposal).map_err(|_| ReturnError::MemoryError)?;
@@ -173,12 +228,12 @@ pub fn add_proposal(proposal: &Proposal) -> Result<u64, ReturnError> {
     })
 }
 
-pub fn set_proposal_by_id(proposal_id: Index, proposal: &Proposal) {
+pub(crate) fn set_proposal_by_id(proposal_id: Index, proposal: &Proposal) {
     PROPOSALS.with(|p| p.borrow_mut().set(proposal_id, proposal))
 }
 
 // ==== ProposalMetadata ====
-pub fn add_proposal_metadata(metadata: &ProposalMetadata) -> Result<u64, ReturnError> {
+pub(crate) fn add_proposal_metadata(metadata: &ProposalMetadata) -> Result<u64, ReturnError> {
     PROPOSAL_METADATA.with(|p| {
         p.borrow_mut()
             .append(metadata)
@@ -186,8 +241,13 @@ pub fn add_proposal_metadata(metadata: &ProposalMetadata) -> Result<u64, ReturnE
     })
 }
 
+#[query]
+pub fn get_proposal_metadata(proposal_id: Index) -> Option<ProposalMetadata> {
+    PROPOSAL_METADATA.with(|p| p.borrow().get(proposal_id))
+}
+
 // ==== ProposalPayload ====
-pub fn add_proposal_payload(payload: &ProposalPayload) -> Result<u64, ReturnError> {
+pub(crate) fn add_proposal_payload(payload: &ProposalPayload) -> Result<u64, ReturnError> {
     PROPOSAL_PAYLOAD.with(|p| {
         p.borrow_mut()
             .append(payload)
@@ -195,7 +255,14 @@ pub fn add_proposal_payload(payload: &ProposalPayload) -> Result<u64, ReturnErro
     })
 }
 
-pub fn get_proposal_payload_by_id(payload_id: Index) -> Result<ProposalPayload, ReturnError> {
+#[query]
+pub fn get_proposal_payload(proposal_id: Index) -> Option<ProposalPayload> {
+    PROPOSAL_PAYLOAD.with(|p| p.borrow().get(proposal_id))
+}
+
+pub(crate) fn get_proposal_payload_by_id(
+    payload_id: Index,
+) -> Result<ProposalPayload, ReturnError> {
     PROPOSAL_PAYLOAD.with(|p| {
         p.borrow()
             .get(payload_id)
@@ -205,7 +272,7 @@ pub fn get_proposal_payload_by_id(payload_id: Index) -> Result<ProposalPayload, 
 }
 
 // ==== ProposalRevoke ====
-pub fn add_proposal_revoke(revoke_data: &ProposalRevoke) -> Result<u64, ReturnError> {
+pub(crate) fn add_proposal_revoke(revoke_data: &ProposalRevoke) -> Result<u64, ReturnError> {
     PROPOSAL_REVOKE.with(|p| {
         p.borrow_mut()
             .append(revoke_data)
@@ -213,13 +280,23 @@ pub fn add_proposal_revoke(revoke_data: &ProposalRevoke) -> Result<u64, ReturnEr
     })
 }
 
+#[query]
+pub fn get_proposal_revoke(revoke_id: Index) -> Result<ProposalRevoke, ReturnError> {
+    PROPOSAL_REVOKE.with(|p| {
+        p.borrow()
+            .get(revoke_id)
+            .ok_or(ReturnError::InvalidIndex)
+            .map(|p| p.clone())
+    })
+}
+
 // ==== ProposalExec ====
 #[allow(dead_code)]
-pub fn set_execution_result(id: Index, proposal_exe_result: ProposalExec) {
+pub(crate) fn set_execution_result(id: Index, proposal_exe_result: ProposalExec) {
     PROPOSAL_EXEC.with(|p| p.borrow_mut().insert(id, proposal_exe_result));
 }
 
-pub fn add_execution_step_result(id: Index, step_result: ExecResult) {
+pub(crate) fn add_execution_step_result(id: Index, step_result: ExecResult) {
     PROPOSAL_EXEC.with(|p| {
         let mut proposal_exe_result = p.borrow_mut().get(&id).unwrap_or_default();
         proposal_exe_result.execution_result.push(step_result);
@@ -227,8 +304,18 @@ pub fn add_execution_step_result(id: Index, step_result: ExecResult) {
     });
 }
 
+#[query]
+pub fn get_proposal_execution_result(id: Index) -> Result<ProposalExec, ReturnError> {
+    PROPOSAL_EXEC.with(|p| {
+        p.borrow()
+            .get(&id)
+            .ok_or(ReturnError::InvalidIndex)
+            .map(|p| p.clone())
+    })
+}
+
 // ==== TimerTasks ====
-pub fn push_timer_task(proposal_id: Index) -> Result<(), ReturnError> {
+pub(crate) fn push_timer_task(proposal_id: Index) -> Result<(), ReturnError> {
     TIMER_TASKS.with(|t| {
         t.borrow_mut()
             .push(&proposal_id)
@@ -237,6 +324,6 @@ pub fn push_timer_task(proposal_id: Index) -> Result<(), ReturnError> {
 }
 
 #[allow(dead_code)]
-pub fn pop_timer_task() -> Option<Index> {
+pub(crate) fn pop_timer_task() -> Option<Index> {
     TIMER_TASKS.with(|t| t.borrow_mut().pop())
 }

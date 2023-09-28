@@ -63,7 +63,8 @@ pub async fn sync_with_governance() -> Result<(), ReturnError> {
 /// Each signer calls this function to vote on a proposal.
 #[update]
 pub fn vote_proposal(proposal: Index, vote: Vote) -> Result<(), ReturnError> {
-    require_caller_is_signer();
+    require_caller_has_role(UserRole::Signer);
+
     let caller = ic_cdk::api::caller();
 
     PROPOSAL_VOTES.with(|v| {
@@ -99,7 +100,7 @@ pub fn vote_proposal(proposal: Index, vote: Vote) -> Result<(), ReturnError> {
 /// The submitted result is simply a yes/no voting power of 1 with a total voting power of 1.
 #[update]
 pub async fn submit_vote_result(proposal: Index) -> Result<(), ReturnError> {
-    require_caller_is_signer();
+    require_caller_has_role(UserRole::Signer);
 
     let (pass_threshold, _) = get_m_of_n();
 
@@ -160,14 +161,6 @@ async fn submit_result(
     result
 }
 
-pub fn require_caller_is_signer() {
-    SIGNERS.with(|s| {
-        if !s.borrow().contains_key(&ic_cdk::api::caller().into()) {
-            ic_cdk::trap("Caller is not a signer");
-        }
-    });
-}
-
 /// Update the m-of-n configuration of the multisig.
 /// It could be dangerous to update the m-of-n configuration when there are open proposals.
 /// # Panics
@@ -178,51 +171,26 @@ pub fn require_caller_is_signer() {
 pub fn update_m_of_n(votes_required: u64, total_votes: u64, signers: Vec<Principal>) {
     require_caller_has_role(UserRole::Admin);
     assert!(votes_required <= total_votes);
-    assert_eq!(total_votes, signers.len() as u64);
+    assert_eq!(total_votes, signers.len() as u64); // SAFETY: Uniqueness of signers is checked in add_role_internal.
 
-    CONFIG.with(|c| {
-        let mut c = c.borrow_mut();
-        let mut config = c.get().0.clone().unwrap();
-        config.votes_required = votes_required;
-        config.total_votes = total_votes;
+    config_set_m_of_n(votes_required, total_votes);
 
-        c.set(Cbor(Some(config))).expect("config update failed");
-    });
-
-    SIGNERS.with(|s| {
-        let mut s = s.borrow_mut();
-        let keys: Vec<StablePrincipal> = s.iter().map(|(k, _)| k).collect();
-        for key in keys {
-            s.remove(&key);
-        }
-        for signer in signers {
-            s.insert(signer.into(), ());
-        }
-        assert_eq!(s.len(), total_votes);
-    });
+    clear_users_of_role(UserRole::Signer);
+    signers
+        .into_iter()
+        .for_each(|p| add_role_internal(UserRole::Signer, p).expect("signer init failed"));
 }
 
 #[update]
 pub fn set_governance(canister_id: Principal) {
     require_caller_has_role(UserRole::Admin);
-    CONFIG.with(|c| {
-        let mut c = c.borrow_mut();
-        let mut config = c.get().0.clone().unwrap();
-        config.governance_canister = canister_id;
-        c.set(Cbor(Some(config))).expect("config update failed");
-    });
+    config_set_governance(canister_id);
 }
 
 #[update]
 pub fn set_name_description(name: String, description: String) {
     require_caller_has_role(UserRole::Admin);
-    CONFIG.with(|c| {
-        let mut c = c.borrow_mut();
-        let mut config = c.get().0.clone().unwrap();
-        config.name = name;
-        config.description = description;
-        c.set(Cbor(Some(config))).expect("config update failed");
-    });
+    config_set_name_description(name, description);
 }
 
 #[query]
@@ -248,41 +216,33 @@ pub fn get_open_proposals() -> Vec<Index> {
 
 #[query]
 pub fn get_name() -> String {
-    CONFIG.with(|c| c.borrow().get().0.clone().unwrap().name)
+    get_config().unwrap().name
 }
 
 #[query]
 pub fn get_description() -> String {
-    CONFIG.with(|c| c.borrow().get().0.clone().unwrap().description)
+    get_config().unwrap().description
 }
 
 #[query]
 pub fn is_initialized() -> bool {
-    CONFIG.with(|c| c.borrow().get().0.clone().unwrap().initialized)
+    config_is_initialized()
 }
 
 #[query]
 pub fn get_governance() -> Principal {
-    CONFIG.with(|c| {
-        let config = c.borrow().get().0.clone().unwrap();
-        config.governance_canister
-    })
+    get_config().unwrap().governance_canister
 }
 
 #[query]
 pub fn get_m_of_n() -> (u64, u64) {
-    CONFIG.with(|c| {
-        let config = c.borrow().get().0.clone().unwrap();
-        (config.votes_required, config.total_votes)
-    })
+    let config = get_config().unwrap();
+    (config.votes_required, config.total_votes)
 }
 
 #[query]
 pub fn get_vote_buffer_time() -> u64 {
-    CONFIG.with(|c| {
-        let config = c.borrow().get().0.clone().unwrap();
-        config.vote_buffer_time
-    })
+    get_config().unwrap().vote_buffer_time
 }
 
 #[cfg(any(target_arch = "wasm32", test))]

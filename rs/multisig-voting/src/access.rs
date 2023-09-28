@@ -1,4 +1,4 @@
-use crate::memory::ADMIN_ROLES;
+use crate::memory::{ADMIN_ROLES, SIGNER_ROLES};
 use crate::types::{ReturnError, StablePrincipal, VM};
 
 use candid::{CandidType, Principal};
@@ -12,6 +12,7 @@ use std::cell::RefCell;
 pub enum UserRole {
     /// Admins can add and remove roles, and perform other priviledged actions (is typically the governance canister).
     Admin = 0,
+    Signer = 1,
 }
 
 #[update]
@@ -36,6 +37,7 @@ pub(crate) fn add_role_internal(role: UserRole, principal: Principal) -> Result<
     };
     match role {
         UserRole::Admin => ADMIN_ROLES.with(op),
+        UserRole::Signer => SIGNER_ROLES.with(op),
     }
 }
 
@@ -55,6 +57,22 @@ pub fn remove_role(role: UserRole, principal: Principal) {
     };
     match role {
         UserRole::Admin => ADMIN_ROLES.with(op),
+        UserRole::Signer => SIGNER_ROLES.with(op),
+    };
+}
+
+#[update]
+pub fn clear_users_of_role(role: UserRole) {
+    require_caller_has_role(UserRole::Admin);
+    let op = |roles: &RefCell<StableVec<StablePrincipal, VM>>| {
+        let r = roles.borrow_mut();
+        for _ in 0..r.len() {
+            r.pop();
+        }
+    };
+    match role {
+        UserRole::Admin => ADMIN_ROLES.with(op),
+        UserRole::Signer => SIGNER_ROLES.with(op),
     };
 }
 
@@ -68,6 +86,7 @@ pub fn has_role(role: UserRole, principal: Principal) -> bool {
     };
     match role {
         UserRole::Admin => ADMIN_ROLES.with(op),
+        UserRole::Signer => SIGNER_ROLES.with(op),
     }
 }
 
@@ -84,5 +103,6 @@ pub fn users_of_role(role: UserRole) -> Vec<Principal> {
     };
     match role {
         UserRole::Admin => ADMIN_ROLES.with(op),
+        UserRole::Signer => SIGNER_ROLES.with(op),
     }
 }

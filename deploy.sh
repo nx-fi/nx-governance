@@ -13,7 +13,7 @@ dfx deploy --network=$NETWORK nx-gov-main;
 NX_GOV_MAIN=$(dfx canister id --network=$NETWORK nx-gov-main)
 dfx deploy --network=$NETWORK simple-validator --argument '(principal "'$NX_GOV_MAIN'")'
 SIMPLE_VALIDATOR=$(dfx canister id --network=$NETWORK simple-validator)
-dfx deploy --network=$NETWORK multisig-voting --argument '(principal "'$NX_GOV_MAIN'", vec {principal "'$T0_PRINCIPAL'"; principal "'$T1_PRINCIPAL'"; principal "'$T2_PRINCIPAL'"})'
+dfx deploy --network=$NETWORK multisig-voting --argument '(principal "'$NX_GOV_MAIN'", 2, 3, vec {principal "'$T0_PRINCIPAL'"; principal "'$T1_PRINCIPAL'"; principal "'$T2_PRINCIPAL'"})'
 MULTISIG_VOTING=$(dfx canister id --network=$NETWORK multisig-voting)
 dfx deploy --network=$NETWORK test-canister --argument '(principal "'$NX_GOV_MAIN'")'
 TEST_CANISTER=$(dfx canister id --network=$NETWORK test-canister)

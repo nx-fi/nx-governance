@@ -92,9 +92,6 @@ impl Proposal {
             total_voting_power: 0,
         }
     }
-    pub fn state_init(&mut self) {
-        self.state = ProposalState::Submitted;
-    }
 
     pub fn is_voteable(&self) -> bool {
         self.state == ProposalState::Open && self.voting_end_time > Some(ic_cdk::api::time())
@@ -128,22 +125,6 @@ impl Proposal {
     /// Finalize the expiration time.
     pub fn finalize_expiration(&mut self) {
         self.expires.convert_to_absolute();
-    }
-
-    /// Return the finalized activation time.
-    pub fn get_finalized_activation(&self) -> Option<TimeNs> {
-        match self.activates {
-            Schedule::At(t) => Some(t),
-            Schedule::In(_) => None,
-        }
-    }
-
-    /// Return the finalized expiration time.
-    pub fn get_finalized_expiration(&self) -> Option<TimeNs> {
-        match self.expires {
-            Schedule::At(t) => Some(t),
-            Schedule::In(_) => None,
-        }
     }
 
     /// Ensures proper state transitions of the state machine.
@@ -207,23 +188,20 @@ impl Proposal {
         &mut self,
         exec_step_state: ExecutionStepState,
     ) -> Result<ProposalState, ProposalError> {
-        match &self.state {
-            ProposalState::Executing(s) => {
-                let prev_state = self.state.clone();
-                let mut inner_state = s.clone();
-                inner_state
+        let prev_state = self.state.clone();
+        match self.state.clone() {
+            ProposalState::Executing(mut s) => {
+                let _ = s
                     .state_transition(exec_step_state)
                     .map_err(|_| ProposalError::StateTransitionError)?;
-                self.state = ProposalState::Executing(inner_state.clone());
+                self.state = ProposalState::Executing(s);
                 Ok(prev_state)
             }
-            ProposalState::ForceExecuting(s) => {
-                let prev_state = self.state.clone();
-                let mut inner_state = s.clone();
-                inner_state
+            ProposalState::ForceExecuting(mut s) => {
+                let _ = s
                     .state_transition(exec_step_state)
                     .map_err(|_| ProposalError::StateTransitionError)?;
-                self.state = ProposalState::ForceExecuting(inner_state.clone());
+                self.state = ProposalState::ForceExecuting(s);
                 Ok(prev_state)
             }
             _ => Err(ProposalError::StateTransitionError),
@@ -348,8 +326,10 @@ pub struct ProposalRevoke {
 
 #[derive(CandidType, Serialize, Default, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ExecutionStepState {
-    /// The default state. Next states: `PreValidateCallError`, `PreValidateFailed`, `Executing`.
+    /// The default state. Next states: `PreValidating`.
     #[default]
+    NotStarted,
+    /// Pre-validation. Next states: `PreValidateCallError`, `PreValidateFailed`, `Executing`.
     PreValidating,
     /// Canister call error in pre-validation. END.
     PreValidateCallError,
@@ -389,7 +369,7 @@ impl ExecutionStep {
     pub fn new(step: u8) -> Self {
         Self {
             step,
-            state: ExecutionStepState::PreValidating,
+            state: ExecutionStepState::NotStarted,
         }
     }
 
@@ -400,6 +380,13 @@ impl ExecutionStep {
         next_state: ExecutionStepState,
     ) -> Result<ExecutionStepState, ExecutionStepError> {
         match self.state {
+            ExecutionStepState::NotStarted => match next_state {
+                ExecutionStepState::PreValidating => {
+                    self.state = next_state;
+                    Ok(ExecutionStepState::NotStarted)
+                }
+                _ => Err(ExecutionStepError::StateTransitionError),
+            },
             ExecutionStepState::PreValidating => match next_state {
                 ExecutionStepState::PreValidateCallError => {
                     self.state = next_state;
@@ -441,7 +428,12 @@ impl ExecutionStep {
                 }
                 _ => Err(ExecutionStepError::StateTransitionError),
             },
-            _ => Err(ExecutionStepError::StateTransitionError),
+            ExecutionStepState::PreValidateCallError
+            | ExecutionStepState::PreValidateFailed
+            | ExecutionStepState::ExecutionCallError
+            | ExecutionStepState::PostValidateCallError
+            | ExecutionStepState::PostValidateFailed
+            | ExecutionStepState::Succeeded => Err(ExecutionStepError::StateTransitionError),
         }
     }
 }

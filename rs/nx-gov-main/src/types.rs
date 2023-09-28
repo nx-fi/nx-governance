@@ -56,17 +56,6 @@ pub type Index = u64;
 
 pub type RawBytes = Vec<u8>;
 
-// TODO: unused
-#[derive(Clone, Debug, CandidType, Deserialize, Serialize)]
-pub struct Stats {
-    config: Config,
-    current_time: TimeNs,
-    number_of_active_proposals: u64,
-    number_of_closed_proposals: u64,
-    total_bytes_used: u64,
-    scheduled_actions: u64,
-}
-
 #[derive(Clone, Debug, CandidType, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ProposalPassingThreshold {
     /// The percentage of the vote that need to do a vote action for a proposal to pass or reject.

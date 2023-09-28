@@ -15,7 +15,7 @@ const MM_PAGE_START: u64 = 512;
 
 // Managed stable memory
 const ADMIN_ROLES_MEM_ID: MemoryId = MemoryId::new(0);
-const SIGNERS_MEM_ID: MemoryId = MemoryId::new(1);
+const SIGNER_ROLES_MEM_ID: MemoryId = MemoryId::new(1);
 const PROPOSAL_VOTES_MEM_ID: MemoryId = MemoryId::new(2);
 
 thread_local! {
@@ -46,10 +46,10 @@ thread_local! {
                 mm.borrow().get(ADMIN_ROLES_MEM_ID)).expect("init failed"))
     });
 
-    pub static SIGNERS: RefCell<StableBTreeMap<StablePrincipal, (), VM>> =
+    pub static SIGNER_ROLES: RefCell<StableVec<StablePrincipal, VM>> =
         MEMORY_MANAGER.with(|mm| {
-            RefCell::new(StableBTreeMap::init(
-                mm.borrow().get(SIGNERS_MEM_ID)))
+            RefCell::new(StableVec::init(
+                mm.borrow().get(SIGNER_ROLES_MEM_ID)).expect("init failed"))
     });
 
     // map of proposal index to proposal state
@@ -86,6 +86,26 @@ pub fn config_set_initialized() {
 
 pub fn config_is_initialized() -> bool {
     CONFIG.with(|c| c.borrow().get().0.clone().unwrap().initialized)
+}
+
+pub fn config_set_name_description(name: String, description: String) {
+    CONFIG.with(|c| {
+        let mut c = c.borrow_mut();
+        let mut config = c.get().0.clone().unwrap();
+        config.name = name;
+        config.description = description;
+        c.set(Cbor(Some(config))).expect("config update failed");
+    });
+}
+
+pub fn config_set_m_of_n(m: u64, n: u64) {
+    CONFIG.with(|c| {
+        let mut c = c.borrow_mut();
+        let mut config = c.get().0.clone().unwrap();
+        config.votes_required = m;
+        config.total_votes = n;
+        c.set(Cbor(Some(config))).expect("config update failed");
+    });
 }
 
 // ==== Proposal Votes ====

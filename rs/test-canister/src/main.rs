@@ -40,11 +40,6 @@ pub fn get_counter() -> u64 {
 }
 
 #[query]
-pub fn get_config() -> Config {
-    CONFIG.with(|c| c.borrow().get().0.clone().unwrap())
-}
-
-#[query]
 pub fn get_name() -> String {
     CONFIG.with(|c| c.borrow().get().0.clone().unwrap().name)
 }

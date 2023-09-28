@@ -96,7 +96,8 @@ pub struct ProposalPayload {
 impl Validate for ProposalPayload {
     fn is_valid(&self) -> bool {
         // all method must not be empty
-        self.messages.iter().all(|m| !m.method.is_empty())
+        // limited to 256 messages due to `ExecutionStep` log index being u8
+        self.messages.iter().all(|m| !m.method.is_empty()) && self.messages.len() <= 256
     }
 }
 

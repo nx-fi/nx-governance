@@ -71,6 +71,7 @@ type ExecutionStepState = variant {
   PostValidateCallError;
   PreValidating;
   PostValidating;
+  NotStarted;
 };
 type FromCanisterRecord = record {
   canister_version : opt nat64;
@@ -153,7 +154,9 @@ type ProposalState = variant {
 };
 type Result = variant { Ok; Err : ReturnError };
 type Result_1 = variant { Ok : Config; Err : ReturnError };
-type Result_2 = variant { Ok : nat64; Err : ReturnError };
+type Result_2 = variant { Ok : ProposalExec; Err : ReturnError };
+type Result_3 = variant { Ok : ProposalRevoke; Err : ReturnError };
+type Result_4 = variant { Ok : nat64; Err : ReturnError };
 type ReturnError = variant {
   DependentProposalNotReady;
   GenericError;
@@ -184,6 +187,7 @@ type UserRole = variant {
 };
 service : () -> {
   add_role : (UserRole, principal) -> (Result);
+  clear_users_of_role : (UserRole) -> ();
   execute : (nat64) -> (Result);
   finalize_vote_result : (nat64) -> (Result);
   force_execute : (nat64) -> (Result);
@@ -192,27 +196,27 @@ service : () -> {
     ) query;
   get_all_submitted_proposal_ids : () -> (vec nat64) query;
   get_config : () -> (Result_1) query;
-  get_controllers_of : (principal) -> (vec principal) query;
-  get_cycle_balance_of : (principal) -> (nat) query;
-  get_freezing_threshold_of : (principal) -> (nat) query;
-  get_info_of : (principal, opt nat64) -> (CanisterInfoResponse) query;
-  get_module_hash_of : (principal) -> (opt vec nat8) query;
+  get_controllers_of : (principal) -> (vec principal);
+  get_cycle_balance_of : (principal) -> (nat);
+  get_freezing_threshold_of : (principal) -> (nat);
+  get_info_of : (principal, opt nat64) -> (CanisterInfoResponse);
+  get_module_hash_of : (principal) -> (opt vec nat8);
   get_next_proposal_id : () -> (nat64) query;
   get_proposal : (nat64) -> (opt Proposal) query;
-  get_proposal_exec : (nat64) -> (opt ProposalExec) query;
+  get_proposal_execution_result : (nat64) -> (Result_2) query;
   get_proposal_metadata : (nat64) -> (opt ProposalMetadata) query;
   get_proposal_payload : (nat64) -> (opt ProposalPayload) query;
-  get_proposal_revoke : (nat64) -> (opt ProposalRevoke) query;
+  get_proposal_revoke : (nat64) -> (Result_3) query;
   get_proposal_states : (nat64, nat64) -> (vec ProposalState) query;
-  get_status_of : (principal) -> (CanisterStatusResponse) query;
-  get_stopping_status_of : (principal) -> (CanisterStatusType) query;
+  get_status_of : (principal) -> (CanisterStatusResponse);
+  get_stopping_status_of : (principal) -> (CanisterStatusType);
   has_role : (UserRole, principal) -> (bool) query;
   http_request : (HttpRequest) -> (HttpResponse) query;
   initialize : (principal, principal, principal, vec principal) -> ();
   remove_role : (UserRole, principal) -> ();
   revoke : (nat64, text) -> (Result);
   submit : (ProposalMetadata, ProposalPayload, Schedule, Schedule, bool) -> (
-      Result_2,
+      Result_4,
     );
   update_config : (Config) -> (Result);
   update_total_voting_power : (nat64, int) -> (Result);

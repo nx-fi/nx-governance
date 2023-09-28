@@ -73,6 +73,18 @@ pub fn config_set_governance(governance: Principal) {
     })
 }
 
+pub fn config_set_initialized() {
+    CONFIG.with(|c| {
+        let mut config = c.borrow().get().0.clone().unwrap();
+        config.initialized = true;
+        let _ = c.borrow_mut().set(Cbor(Some(config)));
+    });
+}
+
+pub fn config_is_initialized() -> bool {
+    CONFIG.with(|c| c.borrow().get().0.clone().unwrap().initialized)
+}
+
 // ==== Proposal Validations ====
 #[query]
 pub fn get_proposal_validation(index: Index) -> Option<u8> {

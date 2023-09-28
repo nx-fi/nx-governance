@@ -5,18 +5,26 @@ use candid::Principal;
 use ic_cdk_macros::{init, update};
 
 #[init]
-pub fn init(gov_main_principal: Principal, init_signers: Vec<Principal>) {
+pub fn init(
+    gov_main_principal: Principal,
+    votes_required: u64,
+    total_votes: u64,
+    signers: Vec<Principal>,
+) {
+    assert!(votes_required <= total_votes);
+    assert_eq!(total_votes, signers.len() as u64); // SAFETY: Uniqueness of signers is checked in add_role_internal.
+
     #[allow(clippy::expect_used)]
     add_role_internal(UserRole::Admin, gov_main_principal).expect("admin init failed");
+
+    config_set_m_of_n(votes_required, total_votes);
+
+    signers
+        .into_iter()
+        .for_each(|p| add_role_internal(UserRole::Signer, p).expect("signer init failed"));
     config_set_governance(gov_main_principal);
 
     // Other init code here
-    SIGNERS.with(|s| {
-        let mut s = s.borrow_mut();
-        for signer in init_signers {
-            s.insert(signer.into(), ());
-        }
-    });
 }
 
 #[update]

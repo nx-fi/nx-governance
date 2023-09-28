@@ -5,6 +5,7 @@ type Config = record {
   description : text;
 };
 type Result = variant { Ok; Err : ReturnError };
+type Result_1 = variant { Ok : Config; Err : ReturnError };
 type ReturnError = variant {
   GenericError;
   MemoryError;
@@ -18,12 +19,14 @@ type UserRole = variant { Admin };
 service : (principal) -> {
   add_role : (UserRole, principal) -> (Result);
   admin_change_counter : (nat64) -> (nat64);
-  get_config : () -> (Config) query;
+  clear_users_of_role : (UserRole) -> ();
+  get_config : () -> (Result_1) query;
   get_counter : () -> (nat64) query;
   get_description : () -> (text) query;
   get_name : () -> (text) query;
   has_role : (UserRole, principal) -> (bool) query;
   increment : () -> (nat64);
+  initialize : () -> ();
   is_initialized : () -> (bool) query;
   remove_role : (UserRole, principal) -> ();
   users_of_role : (UserRole) -> (vec principal) query;

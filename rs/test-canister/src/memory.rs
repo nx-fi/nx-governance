@@ -1,5 +1,6 @@
-use crate::types::{Cbor, Config, StablePrincipal, RM, VM};
+use crate::types::{Cbor, Config, ReturnError, StablePrincipal, RM, VM};
 
+use ic_cdk_macros::query;
 use ic_stable_structures::memory_manager::{MemoryId, MemoryManager};
 use ic_stable_structures::{DefaultMemoryImpl, StableCell, StableVec};
 use std::cell::RefCell;
@@ -41,4 +42,22 @@ thread_local! {
 
 
 
+}
+
+// ==== Config ====
+#[query]
+pub fn get_config() -> Result<Config, ReturnError> {
+    CONFIG.with(|c| c.borrow().get().0.clone().ok_or(ReturnError::MemoryError))
+}
+
+pub fn config_set_initialized() {
+    CONFIG.with(|c| {
+        let mut config = c.borrow().get().0.clone().unwrap();
+        config.initialized = true;
+        let _ = c.borrow_mut().set(Cbor(Some(config)));
+    });
+}
+
+pub fn config_is_initialized() -> bool {
+    CONFIG.with(|c| c.borrow().get().0.clone().unwrap().initialized)
 }

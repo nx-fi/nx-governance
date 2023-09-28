@@ -86,6 +86,26 @@ pub fn remove_role(role: UserRole, principal: Principal) {
     };
 }
 
+#[update]
+pub fn clear_users_of_role(role: UserRole) {
+    require_caller_has_role(UserRole::Admin);
+    let op = |roles: &RefCell<StableVec<StablePrincipal, VM>>| {
+        let r = roles.borrow_mut();
+        for _ in 0..r.len() {
+            r.pop();
+        }
+    };
+    match role {
+        UserRole::Admin => ADMIN_ROLES.with(op),
+        UserRole::Proposer => PROPOSER_ROLES.with(op),
+        UserRole::VoteManager => VOTE_MANAGER_ROLES.with(op),
+        UserRole::Revoker => REVOKER_ROLES.with(op),
+        UserRole::Executor => EXECUTOR_ROLES.with(op),
+        UserRole::ForceExecutor => FORCE_EXECUTOR_ROLES.with(op),
+        UserRole::Validator => VALIDATOR_ROLES.with(op),
+    };
+}
+
 #[query]
 pub fn has_role(role: UserRole, principal: Principal) -> bool {
     let op = |roles: &RefCell<StableVec<StablePrincipal, VM>>| {

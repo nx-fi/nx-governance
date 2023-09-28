@@ -24,15 +24,16 @@ type ReturnError = variant {
   Expired;
 };
 type State = variant { Failed; Passed; Open };
-type UserRole = variant { Admin };
+type UserRole = variant { Admin; Signer };
 type Vote = variant { No; Yes; Abstain };
 type VoteRecord = record {
   abstain_votes : vec principal;
   yes_votes : vec principal;
   no_votes : vec principal;
 };
-service : (principal, vec principal) -> {
+service : (principal, nat64, nat64, vec principal) -> {
   add_role : (UserRole, principal) -> (Result);
+  clear_users_of_role : (UserRole) -> ();
   get_config : () -> (Result_1) query;
   get_description : () -> (text) query;
   get_governance : () -> (principal) query;

@@ -3,12 +3,10 @@
 //! This file is taken from [ic-eth-wallet](https://github.com/dfinity/ic-eth-wallet) which is licensed under Apache-2.0.
 
 use crate::http::HttpResponse;
-#[cfg(target_arch = "wasm32")]
-use core::arch::wasm32::memory_size as wasm_memory_size;
-#[cfg(target_arch = "wasm32")]
-use ic_cdk::api::stable::stable64_size;
+
 use ic_metrics_encoder::MetricsEncoder;
 use serde_bytes::ByteBuf;
+
 /// The Wasm page size as defined in [the Wasm Spec](https://webassembly.github.io/spec/core/exec/runtime.html#memory-instances).
 #[cfg(target_arch = "wasm32")]
 const WASM_PAGE_SIZE: u64 = 65536;
@@ -44,13 +42,18 @@ pub fn get_metrics() -> HttpResponse {
 /// Encodes the metrics in the Prometheus format.
 fn encode_metrics(w: &mut MetricsEncoder<Vec<u8>>) -> std::io::Result<()> {
     w.encode_gauge(
-        "ic_eth_wallet_stable_memory_size_gib",
+        "nx_gov_stable_memory_size_gib",
         gibibytes(stable_memory_size_bytes()),
         "Amount of stable memory used by this canister, in GiB",
     )?;
     w.encode_gauge(
-        "ic_eth_wallet_wasm_memory_size_gib",
+        "nx_gov_wasm_memory_size_gib",
         gibibytes(wasm_memory_size_bytes()),
+        "Amount of wasm memory used by this canister, in GiB",
+    )?;
+    w.encode_gauge(
+        "nx_gov_canister_cycles_balance",
+        cycles_balance() as f64,
         "Amount of wasm memory used by this canister, in GiB",
     )?;
     Ok(())
@@ -60,7 +63,7 @@ fn encode_metrics(w: &mut MetricsEncoder<Vec<u8>>) -> std::io::Result<()> {
 fn stable_memory_size_bytes() -> u64 {
     #[cfg(target_arch = "wasm32")]
     {
-        stable64_size() * WASM_PAGE_SIZE
+        ic_cdk::api::stable::stable64_size() * WASM_PAGE_SIZE
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -72,7 +75,7 @@ fn stable_memory_size_bytes() -> u64 {
 fn wasm_memory_size_bytes() -> u64 {
     #[cfg(target_arch = "wasm32")]
     {
-        (wasm_memory_size(0) as u64) * WASM_PAGE_SIZE
+        (core::arch::wasm32::memory_size(0) as u64) * WASM_PAGE_SIZE
     }
     // This can happen only for test builds.  When compiled for a canister, the target is
     // always wasm32.
@@ -80,6 +83,11 @@ fn wasm_memory_size_bytes() -> u64 {
     {
         0
     }
+}
+
+/// The canister cycle balance
+fn cycles_balance() -> u128 {
+    ic_cdk::api::canister_balance128()
 }
 
 /// Convert bytes to binary gigabytes

@@ -32,7 +32,7 @@ use ic_cdk::api::{
         CanisterInfoResponse, CanisterStatusResponse, CanisterStatusType,
     },
 };
-use ic_cdk_macros::{query, update};
+use ic_cdk_macros::update;
 
 use num_traits::cast::ToPrimitive;
 
@@ -52,8 +52,8 @@ pub fn submit(
     assert!(metadata.is_valid() && payload.is_valid() && expires.is_in_future());
 
     let caller = ic_cdk::api::caller();
-    let metadata_id = add_proposal_metadata(&metadata)?;
     let payload_id = add_proposal_payload(&payload)?;
+    let metadata_id = add_proposal_metadata(&metadata)?;
 
     let proposal = Proposal::from_submit(
         metadata_id,
@@ -282,12 +282,34 @@ pub async fn execute(proposal_id: Index) -> Result<(), ReturnError> {
     if !proposal.is_executable() {
         return Err(ReturnError::IncorrectProposalState);
     }
+    let _ = proposal
+        .state_transition(ProposalState::Executing(ExecutionStep::new(0)))
+        .map_err(|_| ReturnError::StateTransitionError)?;
+
+    if proposal.is_expired() {
+        let _ = proposal
+            .state_transition(ProposalState::Expired)
+            .map_err(|_| ReturnError::StateTransitionError)?;
+        set_proposal_by_id(proposal_id, &proposal);
+        return Err(ReturnError::Expired);
+    }
+
     let proposal_payload = get_proposal_payload_by_id(proposal.payload_id)?;
 
-    validate_execution_dependency(proposal_payload.depends_on)?;
+    match validate_execution_dependency(proposal_payload.depends_on) {
+        Ok(_) => {}
+        Err(ReturnError::DependentProposalNotSucceeded) => {
+            let _ = proposal
+                .state_transition(ProposalState::Failed(ExecutionStep::new(0)))
+                .map_err(|_| ReturnError::StateTransitionError)?;
+            set_proposal_by_id(proposal_id, &proposal);
+            return Err(ReturnError::DependentProposalNotSucceeded);
+        }
+        // If dependent proposal is not ready, caller can retry execute this proposal. The state is not committed (should stay `Accepted`).
+        Err(_) => return Err(ReturnError::DependentProposalNotReady),
+    }
 
     // Execute
-    let mut err_flag = false;
     for (i, message) in proposal_payload.messages.iter().enumerate() {
         proposal
             .state_transition(ProposalState::Executing(ExecutionStep::new(i as u8)))
@@ -295,6 +317,7 @@ pub async fn execute(proposal_id: Index) -> Result<(), ReturnError> {
         set_proposal_by_id(proposal_id, &proposal);
 
         let res = execute_message(message, proposal_id).await;
+        proposal = get_proposal_by_id(proposal_id)?;
 
         if res.is_err() {
             // this pattern matching is guaranteed to succeed
@@ -304,16 +327,15 @@ pub async fn execute(proposal_id: Index) -> Result<(), ReturnError> {
                     .map_err(|_| ReturnError::StateTransitionError)?;
                 set_proposal_by_id(proposal_id, &proposal);
             }
-            err_flag = true;
-            break;
+            return res;
         }
     }
-    if !err_flag {
-        let _ = proposal
-            .state_transition(ProposalState::Succeeded)
-            .map_err(|_| ReturnError::StateTransitionError)?;
-        set_proposal_by_id(proposal_id, &proposal);
-    }
+
+    let _ = proposal
+        .state_transition(ProposalState::Succeeded)
+        .map_err(|_| ReturnError::StateTransitionError)?;
+    set_proposal_by_id(proposal_id, &proposal);
+
     Ok(())
 }
 
@@ -327,12 +349,34 @@ pub async fn force_execute(proposal_id: Index) -> Result<(), ReturnError> {
     if !proposal.is_force_executable() {
         return Err(ReturnError::IncorrectProposalState);
     }
+    let _ = proposal
+        .state_transition(ProposalState::ForceExecuting(ExecutionStep::new(0)))
+        .map_err(|_| ReturnError::StateTransitionError)?;
+
+    if proposal.is_expired() {
+        let _ = proposal
+            .state_transition(ProposalState::Expired)
+            .map_err(|_| ReturnError::StateTransitionError)?;
+        set_proposal_by_id(proposal_id, &proposal);
+        return Err(ReturnError::Expired);
+    }
+
     let proposal_payload = get_proposal_payload_by_id(proposal.payload_id)?;
 
-    validate_execution_dependency(proposal_payload.depends_on)?;
+    match validate_execution_dependency(proposal_payload.depends_on) {
+        Ok(_) => {}
+        Err(ReturnError::DependentProposalNotSucceeded) => {
+            let _ = proposal
+                .state_transition(ProposalState::ForceExecutionFailed(ExecutionStep::new(0)))
+                .map_err(|_| ReturnError::StateTransitionError)?;
+            set_proposal_by_id(proposal_id, &proposal);
+            return Err(ReturnError::DependentProposalNotSucceeded);
+        }
+        Err(_) => return Err(ReturnError::DependentProposalNotReady),
+    }
 
     // Execute
-    let mut err_flag = false;
+
     for (i, message) in proposal_payload.messages.iter().enumerate() {
         proposal
             .state_transition(ProposalState::ForceExecuting(ExecutionStep::new(i as u8)))
@@ -340,6 +384,7 @@ pub async fn force_execute(proposal_id: Index) -> Result<(), ReturnError> {
         set_proposal_by_id(proposal_id, &proposal);
 
         let res = execute_message(message, proposal_id).await;
+        proposal = get_proposal_by_id(proposal_id)?;
 
         if res.is_err() {
             // this pattern matching is guaranteed to succeed
@@ -349,16 +394,16 @@ pub async fn force_execute(proposal_id: Index) -> Result<(), ReturnError> {
                     .map_err(|_| ReturnError::StateTransitionError)?;
                 set_proposal_by_id(proposal_id, &proposal);
             }
-            err_flag = true;
-            break;
+
+            return res;
         }
     }
-    if !err_flag {
-        let _ = proposal
-            .state_transition(ProposalState::ForceExecutionSucceeded)
-            .map_err(|_| ReturnError::StateTransitionError)?;
-        set_proposal_by_id(proposal_id, &proposal);
-    }
+
+    let _ = proposal
+        .state_transition(ProposalState::ForceExecutionSucceeded)
+        .map_err(|_| ReturnError::StateTransitionError)?;
+    set_proposal_by_id(proposal_id, &proposal);
+
     Ok(())
 }
 
@@ -389,12 +434,20 @@ fn validate_execution_dependency(deps: Vec<Index>) -> Result<(), ReturnError> {
     Ok(())
 }
 
-/// A single `message` is executed, modifying state of the proposal.
+/// A single `message` is executed, modifying `ExecutionStepState` of the proposal (but not `ProposalState`).
+/// This is the only place that modifies `ExecutionStepState` (from the initial state `NotStarted`).
 async fn execute_message(message: &CanisterMessage, proposal_id: Index) -> Result<(), ReturnError> {
     let mut proposal = get_proposal_by_id(proposal_id)?;
 
     // Pre validation
+    let _ = proposal
+        .execution_state_transition(ExecutionStepState::PreValidating) // FIX: `execution_state_transition` state not committed
+        .map_err(|_| ReturnError::StateTransitionError)?;
+
+    set_proposal_by_id(proposal_id, &proposal);
+
     if message.pre_validate.is_some() {
+        #[allow(clippy::unwrap_used)] // SAFETY: unwrap after check
         let target = message.pre_validate.as_ref().unwrap();
         let pre_validate_res = ic_cdk::api::call::call_raw128(
             target.canister_id,
@@ -405,12 +458,13 @@ async fn execute_message(message: &CanisterMessage, proposal_id: Index) -> Resul
         .await;
         match pre_validate_res {
             Ok(res) => {
-                let res = decode_one(&res).unwrap();
+                let res = decode_one(&res).unwrap(); // FIX: unsafe unwrap
                 match res {
                     true => {
                         let _ = proposal
                             .execution_state_transition(ExecutionStepState::Executing)
                             .map_err(|_| ReturnError::StateTransitionError)?;
+                        set_proposal_by_id(proposal_id, &proposal);
                     }
                     false => {
                         let _ = proposal
@@ -432,6 +486,11 @@ async fn execute_message(message: &CanisterMessage, proposal_id: Index) -> Resul
     }
 
     // Execution
+    let _ = proposal
+        .execution_state_transition(ExecutionStepState::Executing)
+        .map_err(|_| ReturnError::StateTransitionError)?;
+    set_proposal_by_id(proposal_id, &proposal);
+
     let exec_res = ic_cdk::api::call::call_raw128(
         message.canister_id,
         &message.method,
@@ -459,29 +518,32 @@ async fn execute_message(message: &CanisterMessage, proposal_id: Index) -> Resul
 
     // Post validation
     if message.post_validate.is_some() {
+        #[allow(clippy::unwrap_used)] // SAFETY: unwrap after check
         let target = message.post_validate.as_ref().unwrap();
         #[allow(clippy::unwrap_used)]
         let payload = PostValidatePayload {
             canister_id: message.canister_id,
             method: message.method.clone(),
             message: message.message.clone(),
+            #[allow(clippy::unwrap_used)] // SAFETY: unwrap after check
             response: exec_res.unwrap(),
         };
         let post_validate_res = ic_cdk::api::call::call_raw128(
             target.canister_id,
             &target.method,
-            encode_one(payload).unwrap(),
+            encode_one(payload).unwrap(), // FIX: unsafe unwrap
             target.payment,
         )
         .await;
         match post_validate_res {
             Ok(res) => {
-                let res = decode_one(&res).unwrap();
+                let res = decode_one(&res).unwrap(); // FIX: unsafe unwrap
                 match res {
                     true => {
                         let _ = proposal
                             .execution_state_transition(ExecutionStepState::Succeeded)
                             .map_err(|_| ReturnError::StateTransitionError)?;
+                        set_proposal_by_id(proposal_id, &proposal);
                     }
                     false => {
                         let _ = proposal
@@ -504,8 +566,9 @@ async fn execute_message(message: &CanisterMessage, proposal_id: Index) -> Resul
         let _ = proposal
             .execution_state_transition(ExecutionStepState::Succeeded)
             .map_err(|_| ReturnError::StateTransitionError)?;
+        set_proposal_by_id(proposal_id, &proposal);
     }
-    set_proposal_by_id(proposal_id, &proposal);
+    //set_proposal_by_id(proposal_id, &proposal);
     Ok(())
 }
 
@@ -520,119 +583,41 @@ pub fn update_config(config: Config) -> Result<(), ReturnError> {
     Ok(())
 }
 
-// TODO: add settings related functions
-
-// ==== Getters ====
-
-#[query]
-pub fn get_all_open_proposal_ids_with_expiration() -> Vec<(Index, TimeNs)> {
-    PROPOSALS.with(|p| {
-        p.borrow()
-            .iter()
-            .enumerate()
-            .filter_map(|(i, p)| {
-                if p.state == ProposalState::Open {
-                    Some((i as Index, p.voting_end_time.unwrap()))
-                } else {
-                    None
-                }
-            })
-            .collect()
-    })
-}
-
-#[query]
-pub fn get_all_submitted_proposal_ids() -> Vec<Index> {
-    PROPOSALS.with(|p| {
-        p.borrow()
-            .iter()
-            .enumerate()
-            .filter_map(|(i, p)| {
-                if p.state == ProposalState::Submitted {
-                    Some(i as Index)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    })
-}
-
-#[query]
-pub fn get_proposal_states(skip: Index, take: Index) -> Vec<ProposalState> {
-    PROPOSALS.with(|p| {
-        p.borrow()
-            .iter()
-            .skip(skip as usize)
-            .take(take as usize)
-            .map(|p| p.state.clone())
-            .collect()
-    })
-}
-
-#[query]
-pub fn get_next_proposal_id() -> Index {
-    PROPOSALS.with(|p| p.borrow().len() as Index)
-}
-
-#[query]
-pub fn get_proposal(proposal_id: Index) -> Option<Proposal> {
-    PROPOSALS.with(|p| p.borrow().get(proposal_id))
-}
-
-#[query]
-pub fn get_proposal_metadata(proposal_id: Index) -> Option<ProposalMetadata> {
-    PROPOSAL_METADATA.with(|p| p.borrow().get(proposal_id))
-}
-
-#[query]
-pub fn get_proposal_payload(proposal_id: Index) -> Option<ProposalPayload> {
-    PROPOSAL_PAYLOAD.with(|p| p.borrow().get(proposal_id))
-}
-
-#[query]
-pub fn get_proposal_exec(proposal_id: Index) -> Option<ProposalExec> {
-    PROPOSAL_EXEC.with(|p| p.borrow().get(&proposal_id))
-}
-
-#[query]
-pub fn get_proposal_revoke(proposal_id: Index) -> Option<ProposalRevoke> {
-    PROPOSAL_REVOKE.with(|p| p.borrow().get(proposal_id))
-}
-
 // ==== Target canister getters ====
 // Controller-only statuses of canisters under management are exposed without access control.
 // OPT: add text interface
 // OPT: add bool validation interface with Greater(Value), GreaterOrEqual(), Equal(Value), LessOrEqual(), Less(Value) constraints
+// OPT: multicall validation interface
+// FIX: cycle draining attack. Keep whitelist of canisters under gov control and cache their status. This is a status whitelist and has nothing to do with the validation whitelist. If caller pays cycles then they can bypass the whitelist.
 
-#[query]
+#[update]
 pub async fn get_controllers_of(canister_id: Principal) -> Vec<Principal> {
     get_info_of(canister_id, None).await.controllers
 }
 
-#[query]
+#[update]
 pub async fn get_module_hash_of(canister_id: Principal) -> Option<Vec<u8>> {
     get_info_of(canister_id, None).await.module_hash
 }
 
 #[rustfmt::skip]
-#[query]
+#[update]
 pub async fn get_cycle_balance_of(canister_id: Principal) -> u128 {
     get_status_of(canister_id).await.cycles.0.to_u128().unwrap()
 }
 
 #[rustfmt::skip]
-#[query]
+#[update]
 pub async fn get_freezing_threshold_of(canister_id: Principal) -> u128 {
     get_status_of(canister_id).await.settings.freezing_threshold.0.to_u128().unwrap()
 }
 
-#[query]
+#[update]
 pub async fn get_stopping_status_of(canister_id: Principal) -> CanisterStatusType {
     get_status_of(canister_id).await.status
 }
 
-#[query]
+#[update]
 pub async fn get_status_of(canister_id: Principal) -> CanisterStatusResponse {
     let call_result: CallResult<(CanisterStatusResponse,)> =
         canister_status(CanisterIdRecord { canister_id }).await;
@@ -640,7 +625,7 @@ pub async fn get_status_of(canister_id: Principal) -> CanisterStatusResponse {
     status
 }
 
-#[query]
+#[update]
 pub async fn get_info_of(
     canister_id: Principal,
     num_requested_changes: Option<u64>,
