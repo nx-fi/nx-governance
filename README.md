@@ -4,6 +4,8 @@ Welcome to NX Governance, a cutting-edge multi-chain governance framework built 
 
 🚨🚨🚨 THIS PROJECT IS STILL WIP. DO NOT USE FOR PRODUCTION. 🚨🚨🚨
 
+![nx3](https://github.com/nx-fi/nx-governance/assets/123998984/752a3356-466e-431d-8373-004e244754b3)
+
 ## 🌟 Key Features
 
 - **Proposal-Centric**: Every action revolves around proposals, ensuring transparency and accountability. This includes canister installs and upgrades, as well as privileged actions such as admin-only functions.
