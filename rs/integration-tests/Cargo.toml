@@ -1,13 +1,9 @@
 [package]
-name = "nx-gov-main"
+name = "integration-tests"
 version = "0.2.0"
 edition = "2021"
 
-[[bin]]
-name = "nx-gov-main"
-path = "src/main.rs"
-
-[dependencies]
+[dev-dependencies]
 candid.workspace = true
 ciborium.workspace = true
 ic-cdk.workspace = true
@@ -18,8 +14,10 @@ ic-stable-structures.workspace = true
 num-traits.workspace = true
 serde.workspace = true
 serde_bytes.workspace = true
-
-[dev-dependencies]
+pocket-ic.workspace = true
 rand.workspace = true
+nx-gov-main = { path = "../nx-gov-main"}
 
-
+[[test]]
+name = "integration-tests"
+path = "src/tests.rs"

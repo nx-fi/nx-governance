@@ -2,3 +2,5 @@
 .dfx/*
 **/.env
 /demo
+pocket-ic
+.vscode

@@ -1,6 +1,6 @@
 [package]
 name = "simple-validator"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [[bin]]
@@ -15,3 +15,6 @@ ic-cdk-macros.workspace = true
 ic-stable-structures.workspace = true
 serde.workspace = true
 serde_bytes.workspace = true
+
+[dev-dependencies]
+rand.workspace = true

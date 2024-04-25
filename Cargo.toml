@@ -4,17 +4,21 @@ members = [
     "rs/simple-validator",
     "rs/multisig-voting",
     "rs/test-canister",
+    "rs/integration-tests"
 ]
 resolver = "2"
 
 [workspace.dependencies]
-candid = { version = "0.9.7", features = ["parser"] }
-ciborium = "0.2.1"
-ic-cdk = "0.11.0"
-ic-cdk-macros = "0.8.0"
-ic-cdk-timers = "0.5.0"
-ic-metrics-encoder = "1.1.0"
-ic-stable-structures = "0.6.0-beta.1"
-num-traits = "0.2.16"
-serde = "1.0.188"
-serde_bytes = "0.11.12"
+candid = { version = "0.10.7" }
+ciborium = "0.2.2"
+ic-cdk = "0.13.2"
+ic-cdk-macros = "0.13.2"
+ic-cdk-timers = "0.7.0"
+ic-metrics-encoder = "1.1.1"
+ic-stable-structures = "0.6.4"
+num-traits = "0.2.18"
+pocket-ic = "2.2"
+rand = "0.8.5" 
+serde = { version = "1.0", features = ["derive"] }
+serde_bytes = "0.11"
+

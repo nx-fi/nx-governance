@@ -42,12 +42,17 @@ pub(crate) fn add_role_internal(role: UserRole, principal: Principal) -> Result<
 #[update]
 pub fn remove_role(role: UserRole, principal: Principal) {
     require_caller_has_role(UserRole::Admin);
+    _remove_role(role, principal);
+}
+fn _remove_role(role: UserRole, principal: Principal) {
     let op = |roles: &RefCell<StableVec<StablePrincipal, VM>>| {
-        if let Some(index) = roles
-            .borrow()
-            .iter()
-            .position(|p| p == StablePrincipal::from(principal))
-        {
+        let index = {
+            roles
+                .borrow()
+                .iter()
+                .position(|p| p == StablePrincipal::from(principal))
+        };
+        if let Some(index) = index {
             let r = roles.borrow_mut();
             r.set(index as u64, &r.get(r.len() - 1).unwrap());
             r.pop();
@@ -61,6 +66,9 @@ pub fn remove_role(role: UserRole, principal: Principal) {
 #[update]
 pub fn clear_users_of_role(role: UserRole) {
     require_caller_has_role(UserRole::Admin);
+    _clear_users_of_role(role);
+}
+fn _clear_users_of_role(role: UserRole) {
     let op = |roles: &RefCell<StableVec<StablePrincipal, VM>>| {
         let r = roles.borrow_mut();
         for _ in 0..r.len() {
@@ -103,19 +111,37 @@ pub fn users_of_role(role: UserRole) -> Vec<Principal> {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
-    // use candid::Principal;
+    use super::*;
+    use rand::Rng;
+    fn generate_random_principal() -> Principal {
+        let mut rng = rand::thread_rng();
+        let random_bytes: [u8; 29] = rng.gen(); // Generate 29 random bytes
+        Principal::from_slice(&random_bytes)
+    }
 
-    // panicked at 'msg_caller_size should only be called inside canisters.'
-    // #[test]
-    // fn test_remove_role() {
-    //     let principal = Principal::from_text("3we4s-lyaaa-aaaak-aegrq-cai").unwrap();
-    //     let _ = add_role(UserRole::Admin, principal);
+    #[test]
+    fn role_test() -> Result<(), String> {
+        let n = 3;
+        let mut principal_admin: Principal = Principal::anonymous();
 
-    //     assert!(has_role(UserRole::Admin, principal));
+        for _i in 0..n {
+            principal_admin = generate_random_principal();
+            assert!(!has_role(UserRole::Admin, principal_admin));
+            let _res = add_role_internal(UserRole::Admin, principal_admin);
+            assert!(has_role(UserRole::Admin, principal_admin));
+        }
 
-    //     remove_role(UserRole::Admin, principal);
+        let _users = users_of_role(UserRole::Admin);
+        assert_eq!(_users.len(), n as usize);
 
-    //     assert!(!has_role(UserRole::Admin, principal));
-    // }
+        _remove_role(UserRole::Admin, principal_admin);
+        assert!(!has_role(UserRole::Admin, principal_admin));
+
+        _remove_role(UserRole::Admin, principal_admin); // Should not panic, no effect
+
+        _clear_users_of_role(UserRole::Admin);
+        let _users = users_of_role(UserRole::Admin);
+        assert_eq!(_users.len(), 0);
+        Ok(())
+    }
 }

@@ -130,3 +130,99 @@ pub fn add_proposal_state(index: Index, state: ProposalState) {
         }
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{State, VoteRecord};
+    use rand::Rng;
+    fn generate_random_principal() -> Principal {
+        let mut rng = rand::thread_rng();
+        let random_bytes: [u8; 29] = rng.gen(); // Generate 29 random bytes
+        Principal::from_slice(&random_bytes)
+    }
+
+    #[test]
+    fn test_config() {
+        // The config is initialized with default values
+        let config = get_config().unwrap();
+        assert_eq!(config.name, "multisig-voting");
+        assert_eq!(config.description, "An m-of-n multisig canister");
+        assert!(!config.initialized);
+        assert_eq!(config.governance_canister, Principal::anonymous());
+        assert_eq!(config.votes_required, 2);
+        assert_eq!(config.total_votes, 3);
+        assert_eq!(config.vote_buffer_time, 900 * 1_000_000_000);
+    }
+
+    #[test]
+    fn test_init() {
+        config_set_initialized();
+        assert!(config_is_initialized());
+        let config = get_config().unwrap();
+        assert!(config.initialized);
+    }
+
+    #[test]
+    fn test_config_set_governance() {
+        let principal = generate_random_principal();
+        config_set_governance(principal);
+        let config = get_config().unwrap();
+        assert_eq!(config.governance_canister, principal);
+    }
+
+    #[test]
+    fn test_config_set_name_description() {
+        config_set_name_description("test-name".to_string(), "test-description".to_string());
+        let config = get_config().unwrap();
+        assert_eq!(config.name, "test-name");
+        assert_eq!(config.description, "test-description");
+    }
+
+    #[test]
+    fn test_config_set_m_of_n() {
+        config_set_m_of_n(3, 4);
+        let config = get_config().unwrap();
+        assert_eq!(config.votes_required, 3);
+        assert_eq!(config.total_votes, 4);
+    }
+
+    #[test]
+    fn test_proposal_state() {
+        let index = 1;
+        let expir = 1000u64;
+        let state_open = ProposalState {
+            expiration: expir,
+            state: State::Open,
+            vote_record: VoteRecord {
+                yes_votes: vec![],
+                no_votes: vec![],
+                abstain_votes: vec![],
+            },
+        };
+        let state_failed = ProposalState {
+            expiration: expir,
+            state: State::Failed,
+            vote_record: VoteRecord {
+                yes_votes: vec![],
+                no_votes: vec![],
+                abstain_votes: vec![],
+            },
+        };
+        add_proposal_state(index, state_open.clone());
+        let state_res = get_proposal_state(index).unwrap();
+        assert_eq!(state_open, state_res);
+
+        add_proposal_state(index, state_failed.clone()); // no overwrite
+        let state_res = get_proposal_state(index).unwrap();
+        assert_eq!(state_open, state_res);
+
+        set_proposal_state(index, state_failed.clone()); // overwrite
+        let state_res = get_proposal_state(index).unwrap();
+        assert_eq!(state_failed, state_res);
+
+        add_proposal_state(index + 1, state_failed.clone());
+        let state_res = get_proposal_state(index + 1).unwrap();
+        assert_eq!(state_failed, state_res);
+    }
+}
